@@ -1,0 +1,117 @@
+name: Build for x86 and ARM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ["ubuntu-18.04"]
+        arch:
+          - x86_64
+          # - arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up QEMU
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.8"
+
+      - name: Configure environment for ARM
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y python3.8:arm64
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build project
+        run: |
+          # 这里是你的构建命令
+          python setup.py
+
+      - name: List release folders
+        id: list_folders
+        run: |
+          python3 -c '
+          import yaml, os, json
+          folders = [f"releases/{d[:-3]}" for d in os.listdir("./") if d.endswith(".yml")]
+          with open("folders.json", "w") as fh:
+              json.dump(folders, fh)
+          '
+
+      - name: Upload folders artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-folders
+          path: folders.json
+
+      - name: Cache build artifacts
+        uses: actions/cache@v2
+        with:
+          path: releases/
+          key: ${{ runner.os }}-build-${{ matrix.arch }}
+
+  create_releases:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download folders artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: release-folders
+
+      - name: Read folders
+        id: read_folders
+        run: |
+          folders=$(cat folders.json)
+          echo "folders=$folders" >> $GITHUB_OUTPUT
+
+      - name: Restore build artifacts
+        uses: actions/cache@v2
+        with:
+          path: releases/
+          key: ${{ runner.os }}-build-${{ matrix.arch }}
+
+      - name: Create releases using Python
+        run: |
+          python3 <<EOF
+          import os
+          import json
+
+          # 从环境变量中读取 'steps.read_folders.outputs.folders'
+          folders = os.getenv('folders')
+
+          # 将 JSON 格式的字符串转换为 Python 列表
+          folder_list = json.loads(folders)
+
+          # 遍历文件夹列表，创建 release
+          for folder in folder_list:
+              print(f"Creating release for folder: {folder}")
+              folder_name = os.path.basename(folder)
+
+              # 使用 os.system 调用 'gh release create' 命令
+              os.system(f'gh release create {folder_name} --title "Release for {folder}" --notes "Automated release"')
+          EOF
+        env:
+          folders: ${{ steps.read_folders.outputs.folders }}
