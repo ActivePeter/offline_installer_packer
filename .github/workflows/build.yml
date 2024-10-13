@@ -51,7 +51,7 @@ jobs:
         run: |
           python3 -c '
           import yaml, os, json
-          folders = [f"releases/{d[:-3]}" for d in os.listdir("./") if d.endswith(".yml")]
+          folders = [f"releases/{d[:-4]}" for d in os.listdir("./") if d.endswith(".yml")]
           with open("folders.json", "w") as fh:
               json.dump(folders, fh)
           '
@@ -70,6 +70,7 @@ jobs:
 
   create_releases:
     needs: build
+    permissions: write-all
     runs-on: ubuntu-latest
 
     steps:
@@ -84,6 +85,7 @@ jobs:
       - name: Read folders
         id: read_folders
         run: |
+          cat folders.json
           folders=$(cat folders.json)
           echo "folders=$folders" >> $GITHUB_OUTPUT
 
@@ -108,6 +110,7 @@ jobs:
           # 遍历文件夹列表，创建 release
           for folder in folder_list:
               print(f"Creating release for folder: {folder}")
+              print(f"Files in {folder}: {os.listdir(folder)}")
               folder_name = os.path.basename(folder)
 
               # 使用 os.system 调用 'gh release create' 命令
@@ -115,3 +118,4 @@ jobs:
           EOF
         env:
           folders: ${{ steps.read_folders.outputs.folders }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
