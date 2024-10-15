@@ -4,9 +4,10 @@ import sys
 import tempfile
 import yaml
 
-def create_dockerfile(temp_dir):
-    dockerfile_content = """
-FROM ubuntu:18.04
+def create_dockerfile(temp_dir,dockeros):
+    dockeros_img=dockeros.replace("-", ":")
+    dockerfile_content = f"""
+FROM {dockeros_img}
 
 USER root
 
@@ -19,6 +20,8 @@ RUN pip3 install --upgrade pip
 
 RUN apt-get update
 RUN apt-get install -y apt-offline unzip apt-rdepends
+
+ENV DOCKEROS={dockeros}
 
 # 设置工作目录
 WORKDIR /app
@@ -205,16 +208,18 @@ def main():
 
         download_all_dependencies(package)
         print("debs downloaded:",os.listdir("./"))
+        
         debs=[]
+        DOCKEROS=os.environ["DOCKEROS"]
         for deb in os.listdir("./"):
-            if deb.endswith(".deb") and deb.find("libc")==-1:
-                newdeb=deb.replace("%","").replace("+","-").replace("_","-").replace(":", "-").replace("~","-")
-                os_system(f"mv {deb} {newdeb}")
+            if deb.endswith(".deb") and not deb.startswith("ubuntu"):
+                newdeb=deb.replace("%","").replace("_","-").replace(":", "-").replace("~","-")
+                os_system(f"mv {deb} {DOCKEROS}_{newdeb}")
                 debs.append(newdeb)
         
         # debs=[deb for deb in os.listdir("./") if deb.endswith(".deb")]
         print("debs",debs)
-        with open("./pkgs.txt","w") as f:
+        with open(f"./{DOCKEROS}_pkgs.txt","w") as f:
             for deb in debs:
                 f.write(deb+"\\n")
         # print("pkgs",pkgs)
@@ -238,10 +243,10 @@ if __name__ == "__main__":
     with open(os.path.join(temp_dir, 'download_debs.py'), 'w') as f:
         f.write(container_script_content)
 
-def build_and_run_docker(output_dir, packages):
+def build_and_run_docker(output_dir, packages,dockeros):
     with tempfile.TemporaryDirectory() as temp_dir:
         # 创建 Dockerfile
-        create_dockerfile(temp_dir)
+        create_dockerfile(temp_dir,dockeros)
         
         # 创建 run.sh
         create_run_script(temp_dir)
@@ -262,21 +267,22 @@ def build_and_run_docker(output_dir, packages):
                     image_tag, '/app/output'] + packages
         subprocess.run(command, check=True)
 
-def deb_one_pack(packname,sub_packs):
+def deb_one_pack(packname,sub_packs,dockeros):
     # if len(sys.argv) < 3:
     #     print("Usage: python3 download_debs.py <package1> <package2> ...")
     #     sys.exit(1)
-
-    output_dir = "releases/"+packname
+    output_dir = f"releases/{dockeros}_{packname}"
     # packages = sys.argv[2:]
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     os.system(f"chmod 777 {output_dir}")
 
-    build_and_run_docker(output_dir, sub_packs)
+    build_and_run_docker(output_dir, sub_packs,dockeros)
 
 def main():
+    DOCKEROS=os.environ['DOCKEROS']
+    print(f"building packs for {DOCKEROS}")
     os.system("docker login")
     ymls=[f for f in os.listdir("./") if f.endswith(".yml")]
     for yml in ymls:
@@ -284,7 +290,8 @@ def main():
             conf=yaml.safe_load(f)
         for key in conf:
             if key=='apt':
-                deb_one_pack(yml.split(".yml")[0],conf['apt'])
+                # for dockeros in ["ubuntu-18.04","ubuntu-20.04","ubuntu-22.04"]:
+                deb_one_pack(yml.split(".yml")[0],conf['apt'],DOCKEROS)
             else:
                 print("unsupported conf key: {key}")
 
