@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: ["ubuntu-18.04"]
+        os: ["ubuntu-18.04","ubuntu-20.04","ubuntu-22.04"]
         arch:
           - x86_64
           # - arm64
@@ -50,22 +50,28 @@ jobs:
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKERUSER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKERPW }}
+          DOCKEROS: ${{ matrix.os }}
 
       - name: List release folders
         id: list_folders
         run: |
           python3 -c '
           import yaml, os, json
+          OS="${{ matrix.os }}"
           folders = [f"releases/{d[:-4]}" for d in os.listdir("./") if d.endswith(".yml")]
           for folder in folders:
-              print(f"uploading {folder}")
               folder_name = os.path.basename(folder)
-              os.system(f"gh release create {folder_name} --title \"Release for {folder}\" --notes \"Automated release\" ")
-              os.system(f"gh release upload {folder_name} {folder}/* --clobber")
+              folder_dir = os.path.dirname(folder)
+              os_folder_name=f"{OS}_{folder_name}"
+              os_folder=f"{folder_dir}/{os_folder_name}"
+              print(f"uploading {os_folder}")
+              os.system(f"gh release create {os_folder_name} --title \"Release for {os_folder_name}\" --notes \"Automated release\" ")
+              os.system(f"gh release upload {os_folder_name} {os_folder}/* --clobber")
           '
         env:
           folders: ${{ steps.read_folders.outputs.folders }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OS: ${{ matrix.os }}
 
       # - name: Upload folders artifact
       #   uses: actions/upload-artifact@v3
