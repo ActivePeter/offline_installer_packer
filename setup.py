@@ -17,6 +17,9 @@ RUN apt-get update && \\
 # 安装 Python 依赖
 RUN pip3 install --upgrade pip
 
+RUN apt-get update
+RUN apt-get install -y apt-offline unzip apt-rdepends
+
 # 设置工作目录
 WORKDIR /app
 
@@ -59,6 +62,14 @@ import subprocess
 import os
 import sys
 
+def os_system(command):
+    print(f"Executing command: {command}")
+    return_code = os.system(command)
+    if return_code != 0:
+        print("Error executing command")
+        return False
+    return True
+    
 def get_dependencies(package_name):
     result = subprocess.run(
         ['apt-cache', 'depends', '--recurse', '--no-recommends', '--no-suggests', '--no-conflicts', '--no-breaks', '--no-replaces', '--no-enhances', package_name],
@@ -81,10 +92,16 @@ def get_dependencies(package_name):
     return dependencies
 
 def download_packages(packages, output_dir):
-    os.system("ls")
+    os_system("ls")
     os.chdir(output_dir)
     for package in packages:
         subprocess.run(['apt', 'download', package], check=True)
+    for f in os.listdir(output_dir):
+        if f.endswith('.deb') and f.find("%")!=-1:
+            newfname=f.replace('%','')
+            print(f"rename {f} to {newfname}")
+            os_system(f"mv {f} {newfname}")
+            
 
 def generate_install_script(packages, output_dir):
     with open(os.path.join(output_dir, 'install.sh'), 'w') as f:
@@ -116,17 +133,104 @@ def main():
         os.makedirs(output_dir)
     except:
         pass
-
-    all_packages = set()
+    
+    clean_cmds=[
+        "apt-get update",
+        "apt-get upgrade",
+        "apt-get autoremove --purge",
+        "apt-get clean",
+    ]
     for package in packages:
-        dependencies = get_dependencies(package)
-        print(f"Getting dependencies for {package} with {dependencies}")
-        all_packages.update(dependencies)
-        all_packages.add(package)
+        os_system(f"apt-get remove -y {package}")
+    
+    for cmd in clean_cmds:
+        os_system(cmd)
+        
+    # all_packages = set()
+    for package in packages:
+        import re
 
-    all_packages = sorted(all_packages)
-    download_packages(all_packages, output_dir)
-    generate_install_script(all_packages, output_dir)
+        def get_package_dependencies(package_name):
+            try:
+                # 使用 apt-rdepends 获取所有依赖项
+                command = f"apt-rdepends {package_name}"
+                process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = process.communicate()
+
+                if process.returncode != 0:
+                    print(f"Error executing command: {stderr.decode()}")
+                    return []
+
+                output = stdout.decode()
+
+                # 解析依赖包列表，忽略无关行
+                dependencies = set()
+                for line in output.splitlines():
+                    # 排除以 " " 或 "Depends:" 开头的行，获取包名
+                    if not line.startswith(" ") and not line.startswith("Depends:"):
+                        dependencies.add(line.strip())
+
+                return list(dependencies)
+            
+            except Exception as e:
+                print(f"Exception occurred: {e}")
+                return []
+
+        def download_package(package_name):
+            try:
+                # 使用 apt-get download 下载 .deb 文件
+                command = f"apt-get download {package_name}"
+                process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = process.communicate()
+                print("download info:",stdout.decode())
+                if process.returncode != 0:
+                    print(f"Failed to download {package_name}: {stderr.decode()}")
+                else:
+                    print(f"Successfully downloaded {package_name}")
+            
+            except Exception as e:
+                print(f"Exception occurred: {e}")
+
+        def download_all_dependencies(package_name):
+            dependencies = get_package_dependencies(package_name)
+            
+            print(f"Found {len(dependencies)} dependencies for {package_name}:")
+            for dep in dependencies:
+                print(dep)
+
+            # 下载所有依赖包
+            for dep in dependencies:
+                download_package(dep)
+            download_package(package_name)
+
+        download_all_dependencies(package)
+        print("debs downloaded:",os.listdir("./"))
+        debs=[]
+        for deb in os.listdir("./"):
+            if deb.endswith(".deb"):
+                newdeb=deb.replace("%","").replace("+","-").replace("_","-").replace(":", "-").replace("~","-")
+                os_system(f"mv {deb} {newdeb}")
+                debs.append(newdeb)
+        
+        # debs=[deb for deb in os.listdir("./") if deb.endswith(".deb")]
+        print("debs",debs)
+        with open("./pkgs.txt","w") as f:
+            for deb in debs:
+                f.write(deb+"\\n")
+        # print("pkgs",pkgs)
+        # os_system(f"mkdir -p {package}")
+        # os_system(f"apt-offline set {package}.sig --install-packages {package}")
+        # os_system(f"apt-offline get {package}.sig -d {package}")
+        # os_system(f"ls")
+        # dependencies = get_dependencies(package)
+        # print(f"Getting dependencies for {package} with {dependencies}")
+        # all_packages.update(dependencies)
+        # all_packages.add(package)
+    
+
+    # all_packages = sorted(all_packages)
+    # download_packages(all_packages, output_dir)
+    # generate_install_script(all_packages, output_dir)
 
 if __name__ == "__main__":
     main()

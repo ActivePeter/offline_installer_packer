@@ -8,6 +8,7 @@ on:
 
 jobs:
   build:
+    permissions: write-all
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -40,78 +41,109 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          
 
       - name: Build project
         run: |
           # 这里是你的构建命令
           python setup.py
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSER }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPW }}
 
       - name: List release folders
         id: list_folders
         run: |
           python3 -c '
           import yaml, os, json
-          folders = [f"releases/{d[:-3]}" for d in os.listdir("./") if d.endswith(".yml")]
-          with open("folders.json", "w") as fh:
-              json.dump(folders, fh)
-          '
-
-      - name: Upload folders artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: release-folders
-          path: folders.json
-
-      - name: Cache build artifacts
-        uses: actions/cache@v2
-        with:
-          path: releases/
-          key: ${{ runner.os }}-build-${{ matrix.arch }}
-
-  create_releases:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Download folders artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: release-folders
-
-      - name: Read folders
-        id: read_folders
-        run: |
-          folders=$(cat folders.json)
-          echo "folders=$folders" >> $GITHUB_OUTPUT
-
-      - name: Restore build artifacts
-        uses: actions/cache@v2
-        with:
-          path: releases/
-          key: ${{ runner.os }}-build-${{ matrix.arch }}
-
-      - name: Create releases using Python
-        run: |
-          python3 <<EOF
-          import os
-          import json
-
-          # 从环境变量中读取 'steps.read_folders.outputs.folders'
-          folders = os.getenv('folders')
-
-          # 将 JSON 格式的字符串转换为 Python 列表
-          folder_list = json.loads(folders)
-
-          # 遍历文件夹列表，创建 release
-          for folder in folder_list:
-              print(f"Creating release for folder: {folder}")
+          folders = [f"releases/{d[:-4]}" for d in os.listdir("./") if d.endswith(".yml")]
+          for folder in folders:
+              print(f"uploading {folder}")
               folder_name = os.path.basename(folder)
-
-              # 使用 os.system 调用 'gh release create' 命令
-              os.system(f'gh release create {folder_name} --title "Release for {folder}" --notes "Automated release"')
-          EOF
+              os.system(f"gh release create {folder_name} --title \"Release for {folder}\" --notes \"Automated release\" ")
+              os.system(f"gh release upload {folder_name} {folder}/* --clobber")
+          '
         env:
           folders: ${{ steps.read_folders.outputs.folders }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: Upload folders artifact
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: release-folders
+      #     path: folders.json
+
+      # - name: Cache build artifacts
+      #   uses: actions/cache@v2
+      #   with:
+      #     path: releases/
+      #     key: ${{ runner.os }}-build8-${{ matrix.arch }}
+
+  # create_releases:
+  #   needs: build
+  #   permissions: write-all
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+
+  #     - name: Download folders artifact
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: release-folders
+
+  #     - name: Read folders
+  #       id: read_folders
+  #       run: |
+  #         cat folders.json
+  #         folders=$(cat folders.json)
+  #         echo "folders=$folders" >> $GITHUB_OUTPUT
+
+  #     - name: Restore build artifacts
+  #       uses: actions/cache@v2
+  #       with:
+  #         path: releases/
+  #         key: ${{ runner.os }}-build8-${{ matrix.arch }}
+
+  #     - name: Create releases using Python
+  #       run: |
+  #         python3 <<EOF
+  #         import os
+  #         import json
+
+  #         # 从环境变量中读取 'steps.read_folders.outputs.folders'
+  #         folders = os.getenv('folders')
+
+  #         # 将 JSON 格式的字符串转换为 Python 列表
+  #         folder_list = json.loads(folders)
+
+  #         # 遍历文件夹列表，创建 release
+  #         for folder in folder_list:
+  #             print(f"Creating release for folder: {folder}")
+  #             print(f"Files in {folder}: {os.listdir(folder)}")
+  #             folder_name = os.path.basename(folder)
+  #             # 使用 os.system 调用 'gh release create' 命令
+  #             os.system(f'gh release create {folder_name} --title "Release for {folder}" --notes "Automated release"')
+              
+              
+  #             with open("install.py") as f:
+  #                 install=f.read()
+  #                 install=install.replace("APP_NAME = ''", f"APP_NAME = '{folder_name}'")
+  #                 zip_packs=[deb for deb in os.listdir(folder) if deb.endswith(".zip")]
+  #                 os.system(f"ls {folder}")
+  #                 for zip_pack in zip_packs:
+  #                     print(f"unzip {zip_pack}")
+  #                     os.system(f"unzip -o {folder}/{zip_pack}")
+  #                 os.system(f"ls {folder}")
+  #                 # print("zip_packs=",zip_packs)
+  #                 install=install.replace("DEB_PACKAGES = []", f"DEB_PACKAGES = {zip_packs}")
+                  
+  #             with open(f"{folder}/install.py", "w") as f:
+  #                 f.write(install)
+  #             os.system(f'gh release upload {folder_name} {folder}/*')
+  #             # os.system(f'gh release upload {folder_name} {folder}/install.py --clobber')
+  #         EOF
+  #       env:
+  #         folders: ${{ steps.read_folders.outputs.folders }}
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,2 +1,20 @@
 apt:
-- build-essential
+  - zip
+  - bison
+  - flex
+  - git
+  - build-essential
+  - cmake
+  - libedit-dev
+  - libllvm12
+  - llvm-12-dev
+  - libclang-12-dev
+  - python
+  - zlib1g-dev
+  - libelf-dev
+  - libfl-dev
+  - python3-setuptools
+  - liblzma-dev
+  - arping
+  - netperf
+  - iperf
