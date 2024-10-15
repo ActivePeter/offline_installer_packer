@@ -1,4 +1,5 @@
 apt:
+  - unzip
   - zip
   - bison
   - flex
@@ -18,3 +19,4 @@ apt:
   - arping
   - netperf
   - iperf
+  - iputils
