@@ -207,7 +207,7 @@ def main():
         print("debs downloaded:",os.listdir("./"))
         debs=[]
         for deb in os.listdir("./"):
-            if deb.endswith(".deb"):
+            if deb.endswith(".deb") and deb.find("libc")==-1:
                 newdeb=deb.replace("%","").replace("+","-").replace("_","-").replace(":", "-").replace("~","-")
                 os_system(f"mv {deb} {newdeb}")
                 debs.append(newdeb)
