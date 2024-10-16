@@ -266,6 +266,8 @@ def build_and_run_docker(output_dir, packages,dockeros):
                     '--entrypoint=/app/mount_scripts/run.sh',
                     image_tag, '/app/output'] + packages
         subprocess.run(command, check=True)
+        output_files=os.listdir(os.path.abspath(output_dir))
+        print(f"output files for {packages} {dockeros} with \n {output_files} \n\n")
 
 def deb_one_pack(packname,sub_packs,dockeros):
     # if len(sys.argv) < 3:

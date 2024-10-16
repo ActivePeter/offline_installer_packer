@@ -64,9 +64,16 @@ jobs:
               folder_dir = os.path.dirname(folder)
               os_folder_name=f"{OS}_{folder_name}"
               os_folder=f"{folder_dir}/{os_folder_name}"
+              
+              output_files=os.listdir(os.path.abspath(os_folder))
+              print(f"output files for {folder} {OS} with \n {output_files} \n\n")
+              
               print(f"uploading {os_folder}")
               os.system(f"gh release create {folder_name} --title \"Release for {os_folder_name}\" --notes \"Automated release\" ")
-              os.system(f"gh release upload {folder_name} {os_folder}/* --clobber")
+              for output_file in output_files:
+                  print(f"uploading {os_folder}/{output_file}")
+                  os.system(f"gh release upload {folder_name} {os_folder}/{output_file} --clobber")
+              # os.system(f"gh release upload {folder_name} {os_folder}/* --clobber")
           '
         env:
           folders: ${{ steps.read_folders.outputs.folders }}
