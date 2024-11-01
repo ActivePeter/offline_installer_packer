@@ -1,0 +1,3 @@
+apt:
+- libglvnd0
+- libopengl0
