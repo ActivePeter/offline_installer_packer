@@ -1,0 +1,3 @@
+apt:
+- ibxcb1-dev
+- libx11-xcb-dev
