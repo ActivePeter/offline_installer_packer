@@ -3,3 +3,5 @@ apt:
   - python3
   - python-pip
   - python3-pip
+  - python-apt
+  - python3-apt
